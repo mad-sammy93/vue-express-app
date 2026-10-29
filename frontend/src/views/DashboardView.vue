@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import SessionControls from '../components/SessionControls.vue'
 import { useSessionsStore } from '@/stores/sessions.ts'
+import { usePracticeSessions } from '../composables/usePracticeSessions'
 
 interface HealthResponse {
   status: string
@@ -11,6 +12,7 @@ interface HealthResponse {
 
 const sessionsStore = useSessionsStore()
 
+//Backend
 const backendMessage = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
@@ -41,6 +43,44 @@ const { completedSessions, dailyGoal, remainingSessions, isGoalReached } =
   storeToRefs(sessionsStore)
 
 const { completeSession, resetSession } = sessionsStore
+
+// Composables
+const {
+  sessions,
+  sessionsLoading,
+  sessionsError,
+  totalMinutes,
+  isSaving,
+  saveError,
+  deletingId,
+  deleteError,
+  isUpdating,
+  updateError,
+  editingId,
+  draftDuration,
+  loadSessions,
+  saveSession,
+  deleteSession,
+  startEditing,
+  saveEditing,
+  cancelEditing,
+} = usePracticeSessions()
+
+// Save Sessions State
+const topic = ref('')
+const durationMinutes = ref<number | string>(25)
+async function submitSession(): Promise<void> {
+  const saved = await saveSession(topic.value, Number(durationMinutes.value))
+
+  if (saved) {
+    topic.value = ''
+    durationMinutes.value = 25
+  }
+}
+
+onMounted(() => {
+  void loadSessions()
+})
 </script>
 
 <template>
@@ -77,9 +117,37 @@ const { completeSession, resetSession } = sessionsStore
   <section>
     <h2>Practice sessions</h2>
 
-    <button :disabled="sessionsLoading" @click="loadSessions">
+    <button
+      :disabled="sessionsLoading || deletingId !== null || editingId !== null"
+      @click="loadSessions"
+    >
       {{ sessionsLoading ? 'Loading...' : 'Load sessions' }}
     </button>
+
+    <form @submit.prevent="submitSession">
+      <h2>Add a practice session</h2>
+
+      <fieldset :disabled="isSaving || editingId !== null">
+        <label for="session-topic">Topic</label>
+        <input id="session-topic" v-model.trim="topic" required />
+
+        <label for="session-duration">Duration in minutes</label>
+        <input
+          id="session-duration"
+          v-model.number="durationMinutes"
+          type="number"
+          min="1"
+          step="1"
+          required
+        />
+
+        <button type="submit">
+          {{ isSaving ? 'Saving...' : 'Add session' }}
+        </button>
+      </fieldset>
+
+      <p v-if="saveError" role="alert">{{ saveError }}</p>
+    </form>
 
     <p v-if="sessionsLoading">Loading practice sessions...</p>
 
@@ -89,11 +157,61 @@ const { completeSession, resetSession } = sessionsStore
 
     <ul v-else-if="sessions.length > 0">
       <li v-for="session in sessions" :key="session.id">
-        {{ session.topic }} — {{ session.durationMinutes }} minutes
+        <template v-if="editingId === session.id">
+          <form @submit.prevent="saveEditing">
+            <label :for="`duration-${session.id}`">
+              {{ session.topic }} — duration in minutes
+            </label>
+
+            <input
+              :id="`duration-${session.id}`"
+              v-model.number="draftDuration"
+              type="number"
+              min="1"
+              step="1"
+              required
+              :disabled="isUpdating"
+            />
+
+            <button
+              type="submit"
+              :disabled="isUpdating || session.durationMinutes === draftDuration"
+            >
+              {{ isUpdating ? 'Saving...' : 'Save' }}
+            </button>
+
+            <button type="button" :disabled="isUpdating" @click="cancelEditing">Cancel</button>
+
+            <p v-if="updateError" role="alert">{{ updateError }}</p>
+          </form>
+        </template>
+
+        <template v-else>
+          {{ session.topic }} — {{ session.durationMinutes }} minutes
+
+          <button
+            type="button"
+            :disabled="editingId !== null || deletingId !== null || sessionsLoading || isSaving"
+            @click="startEditing(session.id, session.durationMinutes)"
+          >
+            Edit
+          </button>
+
+          <button
+            type="button"
+            :disabled="editingId !== null || deletingId !== null || sessionsLoading || isSaving"
+            @click="deleteSession(session.id)"
+          >
+            {{ deletingId === session.id ? 'Deleting...' : 'Delete' }}
+          </button>
+        </template>
       </li>
     </ul>
 
-    <p>Total minutes: {{ totalMinutes }}</p>
+    <p v-else>No practice sessions yet. Add your first one above.</p>
+    <p v-if="deleteError" role="alert">{{ deleteError }}</p>
+
+    <p>Total practice time: {{ totalMinutes }} minutes</p>
   </section>
 </template>
 
