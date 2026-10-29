@@ -5,12 +5,15 @@ import {
     removeSession,
     editSessionDuration
 } from '../controllers/sessions.controller.js'
+import { validateDuration } from '../middleware/validateDuration.js'
+import { validateTopic } from '../middleware/validateTopic.js'
+
 
 const router = Router()
 
 router.get('/', listSessions)
-router.post('/', addSession)
+router.post('/', validateTopic, validateDuration, addSession)
 router.delete('/:id', removeSession)
-router.patch('/:id', editSessionDuration)
+router.patch('/:id', validateDuration, editSessionDuration)
 
 export default router

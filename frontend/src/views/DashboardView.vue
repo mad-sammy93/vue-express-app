@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import { storeToRefs } from 'pinia'
 import SessionControls from '../components/SessionControls.vue'
 import { useSessionsStore } from '@/stores/sessions.ts'
@@ -16,6 +16,9 @@ const sessionsStore = useSessionsStore()
 const backendMessage = ref('')
 const isLoading = ref(false)
 const errorMessage = ref('')
+
+//search
+const searchQuery = ref(localStorage.getItem('skill-lab-search') ?? '')
 
 async function checkBackend(): Promise<void> {
   //Initialize Refs
@@ -78,33 +81,55 @@ async function submitSession(): Promise<void> {
   }
 }
 
+//Search functionality
+const filteredSessions = computed(() => {
+  const query = searchQuery.value.trim().toLowerCase()
+
+  return sessions.value.filter((session) => {
+    return session.topic.toLowerCase().includes(query)
+  })
+})
+const clearSearch = () => {
+  searchQuery.value = ''
+}
+
+const visibleMinutes = computed(() => {
+  return filteredSessions.value.reduce((total, session) => {
+    return total + session.durationMinutes
+  }, 0)
+})
+
 onMounted(() => {
   void loadSessions()
+})
+watch(searchQuery, (newQuery) => {
+  localStorage.setItem('skill-lab-search', newQuery)
 })
 </script>
 
 <template>
-  <h1>Vue Skill Lab</h1>
+  <session class="hide">
+    <h1>Vue Skill Lab</h1>
 
-  <label for="daily-goal">Daily session goal:</label>
+    <label for="daily-goal">Daily session goal:</label>
 
-  <input id="daily-goal" v-model.number="dailyGoal" type="number" min="1" />
+    <input id="daily-goal" v-model.number="dailyGoal" type="number" min="1" />
 
-  <p>Remaining sessions: {{ remainingSessions }}</p>
+    <p>Remaining sessions: {{ remainingSessions }}</p>
 
-  <p>Completed sessions: {{ completedSessions }}</p>
-  <p v-if="completedSessions > 0 && !isGoalReached">You’re making progress!</p>
+    <p>Completed sessions: {{ completedSessions }}</p>
+    <p v-if="completedSessions > 0 && !isGoalReached">You’re making progress!</p>
 
-  <p v-else-if="completedSessions > 0 && isGoalReached">You reached your daily goal!🎉</p>
+    <p v-else-if="completedSessions > 0 && isGoalReached">You reached your daily goal!🎉</p>
 
-  <SessionControls
-    :can-reset="completedSessions > 0"
-    :is-goal-reached="isGoalReached"
-    @complete="completeSession"
-    @reset="resetSession"
-  />
-
-  <section>
+    <SessionControls
+      :can-reset="completedSessions > 0"
+      :is-goal-reached="isGoalReached"
+      @complete="completeSession"
+      @reset="resetSession"
+    />
+  </session>
+  <section class="hide">
     <h2>Backend connection</h2>
 
     <button :disabled="isLoading" @click="checkBackend">
@@ -123,7 +148,17 @@ onMounted(() => {
     >
       {{ sessionsLoading ? 'Loading...' : 'Load sessions' }}
     </button>
+    <div>
+      <label for="session-search">Search sessions</label>
 
+      <input
+        id="session-search"
+        v-model="searchQuery"
+        type="search"
+        placeholder="Search by topic"
+      />
+      <button type="button" @click="clearSearch">Clear Search</button>
+    </div>
     <form @submit.prevent="submitSession">
       <h2>Add a practice session</h2>
 
@@ -155,8 +190,8 @@ onMounted(() => {
       {{ sessionsError }}
     </p>
 
-    <ul v-else-if="sessions.length > 0">
-      <li v-for="session in sessions" :key="session.id">
+    <ul v-else-if="filteredSessions.length > 0">
+      <li v-for="session in filteredSessions" :key="session.id">
         <template v-if="editingId === session.id">
           <form @submit.prevent="saveEditing">
             <label :for="`duration-${session.id}`">
@@ -211,7 +246,7 @@ onMounted(() => {
     <p v-else>No practice sessions yet. Add your first one above.</p>
     <p v-if="deleteError" role="alert">{{ deleteError }}</p>
 
-    <p>Total practice time: {{ totalMinutes }} minutes</p>
+    <p>Total practice time: {{ visibleMinutes }} minutes</p>
   </section>
 </template>
 
@@ -219,5 +254,8 @@ onMounted(() => {
 button {
   padding: 10px 16px;
   cursor: pointer;
+}
+.hide {
+  display: none;
 }
 </style>

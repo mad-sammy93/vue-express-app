@@ -1,14 +1,6 @@
 import { computed, ref } from 'vue'
-
-interface Session {
-  id: number
-  topic: string
-  durationMinutes: number
-}
-
-interface SessionsResponse {
-  data: Session[]
-}
+import type { Session, SessionsResponse } from '../types/session'
+import { fetchSessions } from '../services/sessions.api'
 
 const isSaving = ref(false)
 const saveError = ref('')
@@ -41,14 +33,7 @@ export function usePracticeSessions() {
     sessionsError.value = ''
 
     try {
-      const response = await fetch('/api/sessions')
-
-      if (!response.ok) {
-        throw new Error(`Unable to load sessions: ${response.status}`)
-      }
-
-      const result: SessionsResponse = await response.json()
-      sessions.value = result.data
+      sessions.value = await fetchSessions()
     } catch (error: unknown) {
       sessionsError.value = error instanceof Error ? error.message : 'Unable to load sessions'
     } finally {
