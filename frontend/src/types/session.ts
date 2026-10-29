@@ -7,3 +7,7 @@ export interface Session {
 export interface SessionsResponse {
   data: Session[]
 }
+
+export type CreateSessionInput = Pick<Session, 'topic' | 'durationMinutes'>
+
+export type UpdateSessionDurationInput = Pick<Session, 'durationMinutes'>

@@ -4,6 +4,7 @@ import { storeToRefs } from 'pinia'
 import SessionControls from '../components/SessionControls.vue'
 import { useSessionsStore } from '@/stores/sessions.ts'
 import { usePracticeSessions } from '../composables/usePracticeSessions'
+import SearchInput from '../components/SearchInput.vue'
 
 interface HealthResponse {
   status: string
@@ -149,15 +150,12 @@ watch(searchQuery, (newQuery) => {
       {{ sessionsLoading ? 'Loading...' : 'Load sessions' }}
     </button>
     <div>
-      <label for="session-search">Search sessions</label>
-
-      <input
-        id="session-search"
+      <SearchInput
         v-model="searchQuery"
-        type="search"
+        label="Search sessions"
         placeholder="Search by topic"
+        :disableSearch="sessionsLoading"
       />
-      <button type="button" @click="clearSearch">Clear Search</button>
     </div>
     <form @submit.prevent="submitSession">
       <h2>Add a practice session</h2>

@@ -1,6 +1,11 @@
 import { computed, ref } from 'vue'
 import type { Session, SessionsResponse } from '../types/session'
-import { fetchSessions } from '../services/sessions.api'
+import {
+  fetchSessions,
+  deleteSessionRequest,
+  createSessionRequest,
+  updateDurationRequest,
+} from '../services/sessions.api'
 
 const isSaving = ref(false)
 const saveError = ref('')
@@ -48,21 +53,12 @@ export function usePracticeSessions() {
     saveError.value = ''
 
     try {
-      const response = await fetch('/api/sessions', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ topic, durationMinutes }),
+      const session = await createSessionRequest({
+        topic,
+        durationMinutes,
       })
 
-      if (!response.ok) {
-        const error: { message?: string } = await response.json()
-        throw new Error(error.message ?? 'Unable to save session')
-      }
-
-      const result: { data: Session } = await response.json()
-      sessions.value.push(result.data)
+      sessions.value.push(session)
 
       return true
     } catch (error: unknown) {
@@ -81,13 +77,7 @@ export function usePracticeSessions() {
     deleteError.value = ''
 
     try {
-      const response = await fetch(`/api/sessions/${id}`, {
-        method: 'DELETE',
-      })
-
-      if (!response.ok) {
-        throw new Error(`Unable to delete session: ${response.status}`)
-      }
+      await deleteSessionRequest(id)
 
       sessions.value = sessions.value.filter((session) => {
         return session.id !== id
@@ -106,23 +96,12 @@ export function usePracticeSessions() {
     updateError.value = ''
 
     try {
-      const response = await fetch(`/api/sessions/${id}`, {
-        method: 'PATCH',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ durationMinutes }),
+      const updatedSession = await updateDurationRequest(id, {
+        durationMinutes,
       })
 
-      if (!response.ok) {
-        const error: { message?: string } = await response.json()
-        throw new Error(error.message ?? 'Unable to update session')
-      }
-
-      const result: { data: Session } = await response.json()
-
       sessions.value = sessions.value.map((session) => {
-        return session.id === id ? result.data : session
+        return session.id === id ? updatedSession : session
       })
 
       return true

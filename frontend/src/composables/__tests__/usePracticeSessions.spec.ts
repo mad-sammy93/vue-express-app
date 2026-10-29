@@ -23,7 +23,7 @@ describe('usePracticeSessions', () => {
 
     await loadSessions()
 
-    expect(fetchMock).toHaveBeenCalledWith('/api/sessions')
+    expect(fetchMock).toHaveBeenCalledWith('/api/sessions', undefined)
     expect(sessions.value).toEqual(records)
     expect(totalMinutes.value).toBe(55)
     expect(sessionsLoading.value).toBe(false)
@@ -47,7 +47,7 @@ describe('usePracticeSessions', () => {
   it('successfully deletes a session', async () => {
     const fetchMock = vi
       .spyOn(globalThis, 'fetch')
-      .mockResolvedValue(new Response(null, { status: 200 }))
+      .mockResolvedValue(new Response(null, { status: 204 }))
 
     const { sessions, deletingId, deleteError, deleteSession } = usePracticeSessions()
 
@@ -56,8 +56,8 @@ describe('usePracticeSessions', () => {
     await deleteSession(1)
 
     expect(fetchMock).toHaveBeenCalledWith('/api/sessions/1', { method: 'DELETE' })
-    expect(sessions.value).toEqual([])
     expect(deleteError.value).toBe('')
+    expect(sessions.value).toEqual([])
     expect(deletingId.value).toBeNull()
   })
 })
