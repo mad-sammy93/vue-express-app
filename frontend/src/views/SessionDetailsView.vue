@@ -4,11 +4,16 @@ import { RouterLink, useRoute } from 'vue-router'
 import { fetchSession } from '../services/sessions.api'
 import type { Session } from '../types/session'
 
+type SessionDetailsState =
+  | { status: 'loading' }
+  | { status: 'success'; data: Session }
+  | { status: 'error'; message: string }
+
 const route = useRoute()
 
-const session = ref<Session | null>(null)
-const isLoading = ref(false)
-const errorMessage = ref('')
+const state = ref<SessionDetailsState>({
+  status: 'loading',
+})
 
 watch(
   () => route.params.id,
@@ -21,32 +26,33 @@ watch(
       controller.abort()
     })
 
-    session.value = null
-    errorMessage.value = ''
-    isLoading.value = false
-
     const id = typeof rawId === 'string' ? Number(rawId) : NaN
 
     if (!Number.isSafeInteger(id) || id <= 0) {
-      errorMessage.value = 'Invalid session ID'
+      state.value = {
+        status: 'error',
+        message: 'Invalid session ID',
+      }
       return
     }
 
-    isLoading.value = true
+    state.value = { status: 'loading' }
 
     try {
-      const result = await fetchSession(id, controller.signal)
+      const session = await fetchSession(id, controller.signal)
 
       if (active) {
-        session.value = result
+        state.value = {
+          status: 'success',
+          data: session,
+        }
       }
     } catch (error: unknown) {
       if (active) {
-        errorMessage.value = error instanceof Error ? error.message : 'Unable to load session'
-      }
-    } finally {
-      if (active) {
-        isLoading.value = false
+        state.value = {
+          status: 'error',
+          message: error instanceof Error ? error.message : 'Unable to load session',
+        }
       }
     }
   },
@@ -59,15 +65,15 @@ watch(
 
   <h1>Session details</h1>
 
-  <p v-if="isLoading">Loading session...</p>
+  <p v-if="state.status === 'loading'">Loading session...</p>
 
-  <p v-else-if="errorMessage" role="alert">
-    {{ errorMessage }}
+  <p v-else-if="state.status === 'error'" role="alert">
+    {{ state.message }}
   </p>
 
-  <article v-else-if="session">
-    <h2>{{ session.topic }}</h2>
-    <p>Duration: {{ session.durationMinutes }} minutes</p>
-    <p>Session ID: {{ session.id }}</p>
+  <article v-else-if="state.status === 'success'">
+    <h2>{{ state.data.topic }}</h2>
+    <p>Duration: {{ state.data.durationMinutes }} minutes</p>
+    <p>Session ID: {{ state.data.id }}</p>
   </article>
 </template>

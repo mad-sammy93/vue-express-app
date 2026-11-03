@@ -1,23 +1,32 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, watch, computed, onMounted } from 'vue'
 import {
   RouterLink,
-  // onBeforeRouteLeave
+  // onBeforeRouteLeave,
+  useRoute,
+  useRouter,
 } from 'vue-router'
 import { storeToRefs } from 'pinia'
-import SessionControls from '../components/SessionControls.vue'
+import { createSessionSchema } from '@/types/session'
 import { useSessionsStore } from '@/stores/sessions.ts'
-import { usePracticeSessions } from '../composables/usePracticeSessions'
-import { useUnsavedChanges } from '../composables/useUnsavedChanges'
-import SearchInput from '../components/SearchInput.vue'
-import AppPanel from '../components/AppPanel.vue'
-import SessionList from '../components/SessionList.vue'
-import { createSessionSchema } from '../types/session'
+import { usePracticeSessions } from '@/composables/usePracticeSessions'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
+import { usePagination } from '../composables/usePagination'
+import AppPanel from '@/components/AppPanel.vue'
+import SearchInput from '@/components/SearchInput.vue'
+import PaginationControls from '@/components/PaginationControls.vue'
+import SessionList from '@/components/SessionList.vue'
+import SessionControls from '@/components/SessionControls.vue'
 
+const route = useRoute() // Route - for Routing and reading URL params
+const router = useRouter() // Router - for Routing
+
+// Types
 interface HealthResponse {
   status: string
   message: string
 }
+type SessionSort = 'topic' | 'duration' | 'duration-asc'
 
 const sessionsStore = useSessionsStore()
 
@@ -27,8 +36,9 @@ const isLoading = ref(false)
 const errorMessage = ref('')
 
 //search
-const searchQuery = ref(localStorage.getItem('skill-lab-search') ?? '')
-//zod  validation
+// const searchQuery = ref(localStorage.getItem('skill-lab-search') ?? '') // REMOVED TO facilitate url based search
+
+// Using zod fot validation
 const validationError = ref('')
 
 async function checkBackend(): Promise<void> {
@@ -134,6 +144,46 @@ useUnsavedChanges(hasUnsavedChanges)
 //   return window.confirm('You have unsaved changes. Leave this page and discard them?')
 // })
 
+const searchQuery = computed<string>({
+  get() {
+    const query = route.query.q
+
+    return typeof query === 'string' ? query : ''
+  },
+
+  set(value) {
+    void router.replace({
+      query: {
+        ...route.query,
+        q: value === '' ? undefined : value,
+      },
+      hash: route.hash,
+    })
+  },
+})
+
+const sortBy = computed<SessionSort>({
+  get() {
+    const sort = route.query.sort
+
+    if (sort === 'duration' || sort === 'duration-asc') {
+      return sort
+    }
+
+    return 'topic'
+  },
+
+  set(value) {
+    void router.replace({
+      query: {
+        ...route.query,
+        sort: value === 'topic' ? undefined : value,
+      },
+      hash: route.hash,
+    })
+  },
+})
+
 //Search functionality
 const filteredSessions = computed(() => {
   const query = searchQuery.value.trim().toLowerCase()
@@ -142,6 +192,49 @@ const filteredSessions = computed(() => {
     return session.topic.toLowerCase().includes(query)
   })
 })
+
+const sortedSessions = computed(() => {
+  const result = [...filteredSessions.value]
+
+  return result.sort((first, second) => {
+    if (sortBy.value === 'duration') {
+      return second.durationMinutes - first.durationMinutes
+    }
+
+    if (sortBy.value === 'duration-asc') {
+      return first.durationMinutes - second.durationMinutes
+    }
+
+    return first.topic.localeCompare(second.topic)
+  })
+})
+
+// MOVED to composables
+// const page = ref(1)
+// const pageSize = 2
+
+// const totalPages = computed(() => {
+//   return Math.max(1, Math.ceil(sortedSessions.value.length / pageSize))
+// })
+
+// const paginatedSessions = computed(() => {
+//   const start = (page.value - 1) * pageSize
+
+//   return sortedSessions.value.slice(start, start + pageSize)
+// })
+
+const { page, totalPages, paginatedItems: paginatedSessions } = usePagination(sortedSessions, 2)
+
+// Start from page 1 when the search or sort changes.
+watch([searchQuery, sortBy], () => {
+  page.value = 1
+})
+
+// Keep the page valid when records are removed.
+watch(totalPages, (count) => {
+  page.value = Math.min(page.value, count)
+})
+
 const clearSearch = () => {
   searchQuery.value = ''
 }
@@ -152,12 +245,19 @@ const visibleMinutes = computed(() => {
   }, 0)
 })
 
+const visibleMinuitesOnPage = computed(() => {
+  return paginatedSessions.value.reduce((total, session) => {
+    return total + session.durationMinutes
+  }, 0)
+})
+
 onMounted(() => {
   void loadSessions()
 })
-watch(searchQuery, (newQuery) => {
-  localStorage.setItem('skill-lab-search', newQuery)
-})
+// REMOVED TO facilitate url based search
+// watch(searchQuery, (newQuery) => {
+//   localStorage.setItem('skill-lab-search', newQuery)
+// })
 </script>
 
 <template>
@@ -211,6 +311,13 @@ watch(searchQuery, (newQuery) => {
         placeholder="Search by topic"
         :disabled="sessionsLoading"
       />
+      <label for="session-sort">Sort sessions</label>
+
+      <select id="session-sort" v-model="sortBy">
+        <option value="topic">Topic A–Z</option>
+        <option value="duration">Longest duration first</option>
+        <option value="duration-asc">Shortest duration first</option>
+      </select>
 
       <template #footer>
         <p>Showing {{ filteredSessions.length }} of {{ sessions.length }} sessions</p>
@@ -249,7 +356,7 @@ watch(searchQuery, (newQuery) => {
     <p v-else-if="sessionsError" role="alert">
       {{ sessionsError }}
     </p>
-    <SessionList v-else-if="filteredSessions.length > 0" :sessions="filteredSessions">
+    <SessionList v-else-if="sortedSessions.length > 0" :sessions="paginatedSessions">
       <template #item="{ session }">
         <template v-if="editingId === session.id">
           <form @submit.prevent="saveEditing">
@@ -310,7 +417,12 @@ watch(searchQuery, (newQuery) => {
     <p v-else>No practice sessions yet. Add your first one above.</p>
     <p v-if="deleteError" role="alert">{{ deleteError }}</p>
 
-    <p>Total practice time: {{ visibleMinutes }} minutes</p>
+    <PaginationControls
+      v-if="sortedSessions.length > 0"
+      v-model:page="page"
+      :total-pages="totalPages"
+      :disabled="editingId !== null"
+    />
   </section>
 </template>
 

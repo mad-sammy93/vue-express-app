@@ -1,11 +1,26 @@
 <script setup lang="ts">
+import { useTemplateRef } from 'vue'
+
 defineProps<{
   label: string
   placeholder?: string
-  disableSearch?: boolean
+  disabled?: boolean
 }>()
 
 const model = defineModel<string>({ required: true })
+
+const searchInput = useTemplateRef<HTMLInputElement>('search-input')
+
+function focus(): void {
+  searchInput.value?.focus()
+}
+
+function clearSearch(): void {
+  model.value = ''
+  focus()
+}
+
+defineExpose({ focus })
 </script>
 
 <template>
@@ -13,10 +28,16 @@ const model = defineModel<string>({ required: true })
     <label>
       <span>{{ label }}</span>
 
-      <input v-model="model" type="search" :placeholder="placeholder" :disabled="disableSearch" />
+      <input
+        v-model="model"
+        type="search"
+        :placeholder="placeholder"
+        :disabled="disabled"
+        ref="search-input"
+      />
     </label>
 
-    <button type="button" :disabled="model.length === 0 || disableSearch" @click="model = ''">
+    <button type="button" :disabled="disabled || model.length === 0" @click="clearSearch">
       Clear search
     </button>
   </div>

@@ -10,6 +10,11 @@ export default defineConfig({
   resolve: {
     alias: {
       '@': fileURLToPath(new URL('./src', import.meta.url)),
+      '#': fileURLToPath(new URL('./types', import.meta.url)),
+      '~': fileURLToPath(new URL('./', import.meta.url)),
+      '*': fileURLToPath(new URL('./src/components', import.meta.url)),
+      '@views': fileURLToPath(new URL('./src/views', import.meta.url)),
+      '@composables': fileURLToPath(new URL('./src/composables', import.meta.url)),
     },
   },
   server: {

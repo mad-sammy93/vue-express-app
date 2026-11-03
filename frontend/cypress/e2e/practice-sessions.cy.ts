@@ -139,4 +139,30 @@ describe('Practice sessions', () => {
 
     cy.get('#session-topic').should('have.value', '')
   })
+
+  it('clears the search and returns focus to the input', () => {
+    cy.intercept('GET', '/api/sessions', {
+      statusCode: 200,
+      body: {
+        data: [
+          {
+            id: 1,
+            topic: 'Vue reactivity',
+            durationMinutes: 25,
+          },
+        ],
+      },
+    }).as('loadSessions')
+
+    cy.visit('/')
+    cy.wait('@loadSessions')
+
+    cy.get('input[type="search"]').type('vue')
+
+    cy.contains('button', 'Clear search').click()
+
+    cy.get('input[type="search"]').should('have.value', '').and('be.focused')
+
+    cy.location('search').should('eq', '')
+  })
 })
