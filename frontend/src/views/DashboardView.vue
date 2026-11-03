@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, computed, onMounted } from 'vue'
+import { computed, ref, watch, onMounted, onUnmounted, useTemplateRef } from 'vue'
 import {
   RouterLink,
   // onBeforeRouteLeave,
@@ -37,6 +37,7 @@ const errorMessage = ref('')
 
 //search
 // const searchQuery = ref(localStorage.getItem('skill-lab-search') ?? '') // REMOVED TO facilitate url based search
+const searchControl = useTemplateRef<InstanceType<typeof SearchInput>>('dashboard-search')
 
 // Using zod fot validation
 const validationError = ref('')
@@ -162,6 +163,42 @@ const searchQuery = computed<string>({
   },
 })
 
+// shortcut: press / to focus search
+function handleSearchShortcut(event: KeyboardEvent): void {
+  if (
+    event.key !== '/' ||
+    event.defaultPrevented ||
+    event.isComposing ||
+    event.ctrlKey ||
+    event.metaKey ||
+    event.altKey
+  ) {
+    return
+  }
+
+  const target = event.target
+
+  if (
+    target instanceof HTMLElement &&
+    (target.isContentEditable || target.closest('input, textarea, select'))
+  ) {
+    return
+  }
+
+  if (sessionsLoading.value) return
+
+  event.preventDefault()
+  searchControl.value?.focus()
+}
+
+onMounted(() => {
+  window.addEventListener('keydown', handleSearchShortcut)
+})
+
+onUnmounted(() => {
+  window.removeEventListener('keydown', handleSearchShortcut)
+})
+
 const sortBy = computed<SessionSort>({
   get() {
     const sort = route.query.sort
@@ -209,22 +246,42 @@ const sortedSessions = computed(() => {
   })
 })
 
-// MOVED to composables
-// const page = ref(1)
-// const pageSize = 2
-
-// const totalPages = computed(() => {
-//   return Math.max(1, Math.ceil(sortedSessions.value.length / pageSize))
-// })
-
-// const paginatedSessions = computed(() => {
-//   const start = (page.value - 1) * pageSize
-
-//   return sortedSessions.value.slice(start, start + pageSize)
-// })
-
 const { page, totalPages, paginatedItems: paginatedSessions } = usePagination(sortedSessions, 2)
 
+watch(
+  searchQuery,
+  (query, previousQuery, onCleanup) => {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    onCleanup(() => {
+      if (timer !== undefined) {
+        clearTimeout(timer)
+      }
+
+      controller.abort()
+    })
+
+    if (query.length > 15) {
+      controller.abort()
+      return
+    }
+
+    // Load immediately when the dashboard first opens.
+    if (previousQuery === undefined) {
+      void loadSessions(query, controller.signal)
+      return
+    }
+
+    // Wait for a pause before making subsequent requests.
+    timer = setTimeout(() => {
+      void loadSessions(query, controller.signal)
+    }, 300)
+
+    console.log('\x1b[32m[SEARCH timer]\x1b[0m', timer)
+  },
+  { immediate: true },
+)
 // Start from page 1 when the search or sort changes.
 watch([searchQuery, sortBy], () => {
   page.value = 1
@@ -234,10 +291,6 @@ watch([searchQuery, sortBy], () => {
 watch(totalPages, (count) => {
   page.value = Math.min(page.value, count)
 })
-
-const clearSearch = () => {
-  searchQuery.value = ''
-}
 
 const visibleMinutes = computed(() => {
   return filteredSessions.value.reduce((total, session) => {
@@ -250,14 +303,6 @@ const visibleMinuitesOnPage = computed(() => {
     return total + session.durationMinutes
   }, 0)
 })
-
-onMounted(() => {
-  void loadSessions()
-})
-// REMOVED TO facilitate url based search
-// watch(searchQuery, (newQuery) => {
-//   localStorage.setItem('skill-lab-search', newQuery)
-// })
 </script>
 
 <template>
@@ -293,11 +338,11 @@ onMounted(() => {
     <p v-else-if="backendMessage">{{ backendMessage }}</p>
   </section>
   <section>
-    <h2>Practice sessions</h2>
+    <h1 data-test="dashboard-title" class="dashboard-title">Practice sessions</h1>
 
     <button
       :disabled="sessionsLoading || deletingId !== null || editingId !== null"
-      @click="loadSessions"
+      @click="loadSessions(searchQuery)"
     >
       {{ sessionsLoading ? 'Loading...' : 'Load sessions' }}
     </button>
@@ -306,11 +351,12 @@ onMounted(() => {
         <h2>Search practice sessions</h2>
       </template>
       <SearchInput
+        ref="dashboard-search"
         v-model="searchQuery"
         label="Search sessions"
         placeholder="Search by topic"
-        :disabled="sessionsLoading"
       />
+      <p>Press / to focus search when you aren’t typing in a field.</p>
       <label for="session-sort">Sort sessions</label>
 
       <select id="session-sort" v-model="sortBy">
@@ -423,6 +469,9 @@ onMounted(() => {
       :total-pages="totalPages"
       :disabled="editingId !== null"
     />
+    <p>
+      Total practice time: {{ visibleMinutes }} minutes ({{ visibleMinuitesOnPage }} on this page)
+    </p>
   </section>
 </template>
 

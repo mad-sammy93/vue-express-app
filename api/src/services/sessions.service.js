@@ -1,7 +1,13 @@
 import { mockDatabase } from '../db/mockDatabase.js'
 
-export function getAllSessions() {
-    return mockDatabase.sessions.map((session) => ({ ...session }))
+export function getAllSessions(search = '') {
+    const query = search.trim().toLowerCase()
+
+    return mockDatabase.sessions
+        .filter((session) => {
+            return session.topic.toLowerCase().includes(query)
+        })
+        .map((session) => ({ ...session }))
 }
 
 export function createSession({ topic, durationMinutes }) {

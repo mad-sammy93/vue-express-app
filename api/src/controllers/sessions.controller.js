@@ -7,9 +7,17 @@ import {
 } from '../services/sessions.service.js'
 
 export function listSessions(req, res) {
-    const sessions = getAllSessions()
-    console.log('\x1b[32m[LIST SESSIONS]\x1b[0m', sessions.length)
-    res.json({
+    const search = req.query.q
+
+    if (search !== undefined && typeof search !== 'string') {
+        return res.status(400).json({
+            message: 'Search query must be a single string',
+        })
+    }
+
+    const sessions = getAllSessions(search ?? '')
+
+    return res.json({
         data: sessions,
     })
 }

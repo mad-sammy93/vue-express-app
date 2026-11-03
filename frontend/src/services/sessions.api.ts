@@ -2,8 +2,16 @@ import type { Session, CreateSessionInput, UpdateSessionDurationInput } from '..
 import { sessionsSchema, sessionSchema } from '../types/session'
 import { requestData } from './http'
 
-export async function fetchSessions(): Promise<Session[]> {
-  const data = await requestData<unknown>('/api/sessions')
+export async function fetchSessions(search = '', signal?: AbortSignal): Promise<Session[]> {
+  const query = new URLSearchParams()
+
+  if (search.trim()) {
+    query.set('q', search.trim())
+  }
+
+  const url = query.size > 0 ? `/api/sessions?${query.toString()}` : '/api/sessions'
+
+  const data = await requestData<unknown>(url, signal ? { signal } : undefined)
 
   const result = sessionsSchema.safeParse(data)
 

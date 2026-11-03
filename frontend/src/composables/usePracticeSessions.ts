@@ -9,6 +9,7 @@ import {
 
 const isSaving = ref(false)
 const saveError = ref('')
+let latestLoad = 0
 
 export function usePracticeSessions() {
   const sessions = ref<Session[]>([])
@@ -33,16 +34,27 @@ export function usePracticeSessions() {
     }, 0)
   })
 
-  async function loadSessions(): Promise<void> {
+  async function loadSessions(search = '', signal?: AbortSignal): Promise<void> {
+    const requestId = ++latestLoad
+
     sessionsLoading.value = true
     sessionsError.value = ''
+    sessions.value = []
 
     try {
-      sessions.value = await fetchSessions()
+      const records = await fetchSessions(search, signal)
+
+      if (requestId === latestLoad && !signal?.aborted) {
+        sessions.value = records
+      }
     } catch (error: unknown) {
-      sessionsError.value = error instanceof Error ? error.message : 'Unable to load sessions'
+      if (requestId === latestLoad && !signal?.aborted) {
+        sessionsError.value = error instanceof Error ? error.message : 'Unable to load sessions'
+      }
     } finally {
-      sessionsLoading.value = false
+      if (requestId === latestLoad) {
+        sessionsLoading.value = false
+      }
     }
   }
 

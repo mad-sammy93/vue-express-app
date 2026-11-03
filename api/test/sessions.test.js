@@ -137,3 +137,14 @@ test('malformed JSON returns a clear error without saving', async () => {
 
     assert.deepEqual(mockDatabase.sessions, sessionsBefore)
 })
+
+test('returns an empty list when no sessions match the search', async () => {
+    const response = await request(app)
+        .get('/api/sessions')
+        .query({ q: 'zzzz-no-matching-topic-zzzz' })
+        .expect(200)
+
+    assert.deepEqual(response.body, {
+        data: [],
+    })
+})
