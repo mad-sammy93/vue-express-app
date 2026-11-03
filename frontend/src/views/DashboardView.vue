@@ -11,7 +11,8 @@ import { createSessionSchema } from '@/types/session'
 import { useSessionsStore } from '@/stores/sessions.ts'
 import { usePracticeSessions } from '@/composables/usePracticeSessions'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
-import { usePagination } from '../composables/usePagination'
+import { usePagination } from '@/composables/usePagination'
+import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import AppPanel from '@/components/AppPanel.vue'
 import SearchInput from '@/components/SearchInput.vue'
 import PaginationControls from '@/components/PaginationControls.vue'
@@ -248,40 +249,8 @@ const sortedSessions = computed(() => {
 
 const { page, totalPages, paginatedItems: paginatedSessions } = usePagination(sortedSessions, 2)
 
-watch(
-  searchQuery,
-  (query, previousQuery, onCleanup) => {
-    const controller = new AbortController()
-    let timer: ReturnType<typeof setTimeout> | undefined
+useDebouncedSearch(searchQuery, loadSessions, 300)
 
-    onCleanup(() => {
-      if (timer !== undefined) {
-        clearTimeout(timer)
-      }
-
-      controller.abort()
-    })
-
-    if (query.length > 15) {
-      controller.abort()
-      return
-    }
-
-    // Load immediately when the dashboard first opens.
-    if (previousQuery === undefined) {
-      void loadSessions(query, controller.signal)
-      return
-    }
-
-    // Wait for a pause before making subsequent requests.
-    timer = setTimeout(() => {
-      void loadSessions(query, controller.signal)
-    }, 300)
-
-    console.log('\x1b[32m[SEARCH timer]\x1b[0m', timer)
-  },
-  { immediate: true },
-)
 // Start from page 1 when the search or sort changes.
 watch([searchQuery, sortBy], () => {
   page.value = 1
