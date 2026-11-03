@@ -1,14 +1,17 @@
-import type {
-  Session,
-  SessionsResponse,
-  CreateSessionInput,
-  UpdateSessionDurationInput,
-} from '../types/session'
-import type { ApiResponse, ApiErrorResponse } from '../types/api'
+import type { Session, CreateSessionInput, UpdateSessionDurationInput } from '../types/session'
+import { sessionsSchema, sessionSchema } from '../types/session'
 import { requestData } from './http'
 
 export async function fetchSessions(): Promise<Session[]> {
-  return requestData<Session[]>('/api/sessions')
+  const data = await requestData<unknown>('/api/sessions')
+
+  const result = sessionsSchema.safeParse(data)
+
+  if (!result.success) {
+    throw new Error('The server returned invalid session data')
+  }
+
+  return result.data
 }
 
 export async function createSessionRequest(input: CreateSessionInput): Promise<Session> {
@@ -42,4 +45,16 @@ export async function updateDurationRequest(
     },
     body: JSON.stringify(input),
   })
+}
+
+export async function fetchSession(id: number, signal?: AbortSignal): Promise<Session> {
+  const data = await requestData<unknown>(`/api/sessions/${id}`, { signal })
+
+  const result = sessionSchema.safeParse(data)
+
+  if (!result.success) {
+    throw new Error('The server returned invalid session data')
+  }
+
+  return result.data
 }

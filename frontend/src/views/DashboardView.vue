@@ -1,10 +1,18 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted } from 'vue'
+import {
+  RouterLink,
+  // onBeforeRouteLeave
+} from 'vue-router'
 import { storeToRefs } from 'pinia'
 import SessionControls from '../components/SessionControls.vue'
 import { useSessionsStore } from '@/stores/sessions.ts'
 import { usePracticeSessions } from '../composables/usePracticeSessions'
+import { useUnsavedChanges } from '../composables/useUnsavedChanges'
 import SearchInput from '../components/SearchInput.vue'
+import AppPanel from '../components/AppPanel.vue'
+import SessionList from '../components/SessionList.vue'
+import { createSessionSchema } from '../types/session'
 
 interface HealthResponse {
   status: string
@@ -20,6 +28,8 @@ const errorMessage = ref('')
 
 //search
 const searchQuery = ref(localStorage.getItem('skill-lab-search') ?? '')
+//zod  validation
+const validationError = ref('')
 
 async function checkBackend(): Promise<void> {
   //Initialize Refs
@@ -73,14 +83,56 @@ const {
 // Save Sessions State
 const topic = ref('')
 const durationMinutes = ref<number | string>(25)
+
 async function submitSession(): Promise<void> {
-  const saved = await saveSession(topic.value, Number(durationMinutes.value))
+  validationError.value = ''
+  saveError.value = ''
+
+  const result = createSessionSchema.safeParse({
+    topic: topic.value,
+    durationMinutes: Number(durationMinutes.value),
+  })
+
+  if (!result.success) {
+    validationError.value = result.error.issues[0]?.message ?? 'Please check your input'
+
+    return
+  }
+
+  const saved = await saveSession(result.data.topic, result.data.durationMinutes)
 
   if (saved) {
     topic.value = ''
     durationMinutes.value = 25
   }
 }
+
+const hasUnsavedChanges = computed(() => {
+  const hasNewSessionDraft = topic.value !== '' || Number(durationMinutes.value) !== 25
+
+  if (editingId.value === null) {
+    return hasNewSessionDraft
+  }
+
+  const originalSession = sessions.value.find((session) => {
+    return session.id === editingId.value
+  })
+
+  const hasEditedDuration =
+    originalSession !== undefined && Number(draftDuration.value) !== originalSession.durationMinutes
+
+  return hasNewSessionDraft || hasEditedDuration
+})
+
+useUnsavedChanges(hasUnsavedChanges)
+
+// onBeforeRouteLeave(() => {
+//   if (!hasUnsavedChanges.value) {
+//     return true
+//   }
+
+//   return window.confirm('You have unsaved changes. Leave this page and discard them?')
+// })
 
 //Search functionality
 const filteredSessions = computed(() => {
@@ -149,14 +201,21 @@ watch(searchQuery, (newQuery) => {
     >
       {{ sessionsLoading ? 'Loading...' : 'Load sessions' }}
     </button>
-    <div>
+    <AppPanel title="Find practice sessions">
+      <template #header>
+        <h2>Search practice sessions</h2>
+      </template>
       <SearchInput
         v-model="searchQuery"
         label="Search sessions"
         placeholder="Search by topic"
-        :disableSearch="sessionsLoading"
+        :disabled="sessionsLoading"
       />
-    </div>
+
+      <template #footer>
+        <p>Showing {{ filteredSessions.length }} of {{ sessions.length }} sessions</p>
+      </template>
+    </AppPanel>
     <form @submit.prevent="submitSession">
       <h2>Add a practice session</h2>
 
@@ -180,6 +239,9 @@ watch(searchQuery, (newQuery) => {
       </fieldset>
 
       <p v-if="saveError" role="alert">{{ saveError }}</p>
+      <p v-if="validationError" role="alert">
+        {{ validationError }}
+      </p>
     </form>
 
     <p v-if="sessionsLoading">Loading practice sessions...</p>
@@ -187,9 +249,8 @@ watch(searchQuery, (newQuery) => {
     <p v-else-if="sessionsError" role="alert">
       {{ sessionsError }}
     </p>
-
-    <ul v-else-if="filteredSessions.length > 0">
-      <li v-for="session in filteredSessions" :key="session.id">
+    <SessionList v-else-if="filteredSessions.length > 0" :sessions="filteredSessions">
+      <template #item="{ session }">
         <template v-if="editingId === session.id">
           <form @submit.prevent="saveEditing">
             <label :for="`duration-${session.id}`">
@@ -238,8 +299,13 @@ watch(searchQuery, (newQuery) => {
             {{ deletingId === session.id ? 'Deleting...' : 'Delete' }}
           </button>
         </template>
-      </li>
-    </ul>
+
+        <RouterLink :to="{ name: 'session-details', params: { id: session.id } }">
+          View details
+        </RouterLink>
+      </template>
+    </SessionList>
+    <!-- <ul v-else-if="filteredSessions.length > 0"></ul> -->
 
     <p v-else>No practice sessions yet. Add your first one above.</p>
     <p v-if="deleteError" role="alert">{{ deleteError }}</p>

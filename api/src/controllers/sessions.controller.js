@@ -2,7 +2,8 @@ import {
     getAllSessions,
     createSession,
     deleteSessionById,
-    updateSessionDuration
+    updateSessionDuration,
+    getSessionById
 } from '../services/sessions.service.js'
 
 export function listSessions(req, res) {
@@ -66,6 +67,28 @@ export function editSessionDuration(req, res) {
         })
     }
     console.log('\x1b[32m[EDITED SESSION]\x1b[0m', id, session.durationMinutes, `${session.durationMinutes === 1 ? 'minuite' : 'minuites'}`)
+
+    return res.json({
+        data: session,
+    })
+}
+
+export function getSession(req, res) {
+    const id = Number(req.params.id)
+
+    if (!Number.isSafeInteger(id) || id <= 0) {
+        return res.status(400).json({
+            message: 'Session ID must be a positive whole number',
+        })
+    }
+
+    const session = getSessionById(id)
+
+    if (!session) {
+        return res.status(404).json({
+            message: 'Session not found',
+        })
+    }
 
     return res.json({
         data: session,

@@ -60,4 +60,29 @@ describe('usePracticeSessions', () => {
     expect(sessions.value).toEqual([])
     expect(deletingId.value).toBeNull()
   })
+
+  it('rejects invalid session data from the server', async () => {
+    vi.spyOn(globalThis, 'fetch').mockResolvedValue(
+      new Response(
+        JSON.stringify({
+          data: [
+            {
+              id: 1,
+              topic: 'Invalid duration',
+              durationMinutes: '25',
+            },
+          ],
+        }),
+        { status: 200 },
+      ),
+    )
+
+    const { sessions, sessionsError, sessionsLoading, loadSessions } = usePracticeSessions()
+
+    await loadSessions()
+
+    expect(sessions.value).toEqual([])
+    expect(sessionsError.value).toBe('The server returned invalid session data')
+    expect(sessionsLoading.value).toBe(false)
+  })
 })

@@ -14,6 +14,11 @@ const router = createRouter({
       name: 'about',
       component: () => import('../views/AboutView.vue'),
     },
+    {
+      path: '/sessions/:id',
+      name: 'session-details',
+      component: () => import('../views/SessionDetailsView.vue'),
+    },
   ],
 })
 

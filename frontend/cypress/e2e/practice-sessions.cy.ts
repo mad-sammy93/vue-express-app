@@ -90,4 +90,53 @@ describe('Practice sessions', () => {
 
     cy.contains('button', 'Add session').should('be.enabled')
   })
+
+  it('protects an unsaved draft when navigating away', () => {
+    cy.intercept('GET', '/api/sessions', {
+      statusCode: 200,
+      body: { data: [] },
+    }).as('loadSessions')
+
+    const confirmStub = cy.stub().as('leaveConfirmation')
+
+    confirmStub.onFirstCall().returns(false)
+    confirmStub.onSecondCall().returns(true)
+
+    cy.on('window:confirm', confirmStub)
+
+    cy.visit('/', {
+      onBeforeLoad(win) {
+        win.localStorage.removeItem('skill-lab-search')
+      },
+    })
+
+    cy.wait('@loadSessions')
+
+    cy.get('#session-topic').type('My unfinished session')
+
+    // First attempt: choose Cancel.
+    cy.get('nav').contains('a', 'About').click()
+
+    cy.get('@leaveConfirmation')
+      .should('have.been.calledOnce')
+      .and('have.been.calledWith', 'You have unsaved changes. Leave this page and discard them?')
+
+    cy.location('pathname').should('eq', '/')
+
+    cy.get('#session-topic').should('have.value', 'My unfinished session')
+
+    // Second attempt: choose OK.
+    cy.get('nav').contains('a', 'About').click()
+
+    cy.location('pathname').should('eq', '/about')
+
+    cy.get('@leaveConfirmation').should('have.been.calledTwice')
+
+    // Returning creates a fresh dashboard without the discarded draft.
+    cy.get('nav').contains('a', 'Dashboard').click()
+
+    cy.wait('@loadSessions')
+
+    cy.get('#session-topic').should('have.value', '')
+  })
 })

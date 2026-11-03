@@ -46,3 +46,11 @@ export function updateSessionDuration(id, durationMinutes) {
 
     return { ...session }
 }
+
+export function getSessionById(id) {
+    const session = mockDatabase.sessions.find((session) => {
+        return session.id === id
+    })
+
+    return session ? { ...session } : null
+}

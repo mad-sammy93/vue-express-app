@@ -1,5 +1,5 @@
 import { computed, ref } from 'vue'
-import type { Session, SessionsResponse } from '../types/session'
+import type { Session } from '../types/session'
 import {
   fetchSessions,
   deleteSessionRequest,
