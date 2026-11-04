@@ -1,6 +1,6 @@
 import type { ApiResponse } from '../types/api'
 
-export async function requestData<T>(url: string, options?: RequestInit): Promise<T> {
+export async function requestJson<T>(url: string, options?: RequestInit): Promise<T> {
   const response = await fetch(url, options)
 
   if (!response.ok) {
@@ -20,7 +20,11 @@ export async function requestData<T>(url: string, options?: RequestInit): Promis
     throw new Error(message)
   }
 
-  const result: ApiResponse<T> = await response.json()
+  return response.json()
+}
+
+export async function requestData<T>(url: string, options?: RequestInit): Promise<T> {
+  const result = await requestJson<ApiResponse<T>>(url, options)
 
   return result.data
 }

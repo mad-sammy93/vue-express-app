@@ -1,13 +1,25 @@
 import { mockDatabase } from '../db/mockDatabase.js'
 
-export function getAllSessions(search = '') {
+export function getAllSessions(search = '', sort = 'topic') {
     const query = search.trim().toLowerCase()
 
-    return mockDatabase.sessions
+    const sessions = mockDatabase.sessions
         .filter((session) => {
             return session.topic.toLowerCase().includes(query)
         })
         .map((session) => ({ ...session }))
+
+    return sessions.sort((first, second) => {
+        if (sort === 'duration') {
+            return second.durationMinutes - first.durationMinutes
+        }
+
+        if (sort === 'duration-asc') {
+            return first.durationMinutes - second.durationMinutes
+        }
+
+        return first.topic.localeCompare(second.topic)
+    })
 }
 
 export function createSession({ topic, durationMinutes }) {
@@ -59,4 +71,19 @@ export function getSessionById(id) {
     })
 
     return session ? { ...session } : null
+}
+
+export function getSessionsPage(search, sort, page, limit) {
+    const sessions = getAllSessions(search, sort)
+    const start = (page - 1) * limit
+
+    return {
+        data: sessions.slice(start, start + limit),
+        meta: {
+            total: sessions.length,
+            page,
+            limit,
+            totalPages: Math.max(1, Math.ceil(sessions.length / limit)),
+        },
+    }
 }

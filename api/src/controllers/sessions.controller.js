@@ -3,11 +3,18 @@ import {
     createSession,
     deleteSessionById,
     updateSessionDuration,
-    getSessionById
+    getSessionById,
+    getSessionsPage
 } from '../services/sessions.service.js'
+
 
 export function listSessions(req, res) {
     const search = req.query.q
+    const sort = req.query.sort ?? 'topic'
+    const allowedSorts = ['topic', 'duration', 'duration-asc']
+    const wantsPagination =
+        req.query.page !== undefined ||
+        req.query.limit !== undefined
 
     if (search !== undefined && typeof search !== 'string') {
         return res.status(400).json({
@@ -15,7 +22,43 @@ export function listSessions(req, res) {
         })
     }
 
-    const sessions = getAllSessions(search ?? '')
+    if (typeof sort !== 'string' || !allowedSorts.includes(sort)) {
+        return res.status(400).json({
+            message: 'Sort must be topic, duration, or duration-asc',
+        })
+    }
+
+    if (wantsPagination) {
+        const rawPage = req.query.page ?? '1'
+        const rawLimit = req.query.limit ?? '10'
+
+        if (typeof rawPage !== 'string' || typeof rawLimit !== 'string') {
+            return res.status(400).json({
+                message: 'Page and limit must be single values',
+            })
+        }
+
+        const page = Number(rawPage)
+        const limit = Number(rawLimit)
+
+        if (!Number.isSafeInteger(page) || page < 1) {
+            return res.status(400).json({
+                message: 'Page must be a positive whole number',
+            })
+        }
+
+        if (!Number.isSafeInteger(limit) || limit < 1 || limit > 100) {
+            return res.status(400).json({
+                message: 'Limit must be a whole number between 1 and 100',
+            })
+        }
+
+        return res.json(
+            getSessionsPage(search ?? '', sort, page, limit),
+        )
+    }
+
+    const sessions = getAllSessions(search ?? '', sort)
 
     return res.json({
         data: sessions,

@@ -1,6 +1,8 @@
-import type { Session, CreateSessionInput, UpdateSessionDurationInput } from '../types/session'
-import { sessionsSchema, sessionSchema } from '../types/session'
-import { requestData } from './http'
+import type { Session, CreateSessionInput, UpdateSessionDurationInput } from '@/types/session'
+import { sessionsSchema, sessionSchema } from '@/types/session'
+import { requestData, requestJson } from './http'
+import { sessionPageSchema } from '@/types/pagination'
+import type { SessionPage, SessionPageQuery } from '../types/pagination'
 
 export async function fetchSessions(search = '', signal?: AbortSignal): Promise<Session[]> {
   const query = new URLSearchParams()
@@ -62,6 +64,34 @@ export async function fetchSession(id: number, signal?: AbortSignal): Promise<Se
 
   if (!result.success) {
     throw new Error('The server returned invalid session data')
+  }
+
+  return result.data
+}
+
+export async function fetchSessionsPage(
+  { search = '', sort = 'topic', page = 1, limit = 2 }: SessionPageQuery = {},
+  signal?: AbortSignal,
+): Promise<SessionPage> {
+  const query = new URLSearchParams({
+    sort,
+    page: String(page),
+    limit: String(limit),
+  })
+
+  if (search.trim()) {
+    query.set('q', search.trim())
+  }
+
+  const response = await requestJson<unknown>(
+    `/api/sessions?${query.toString()}`,
+    signal ? { signal } : undefined,
+  )
+
+  const result = sessionPageSchema.safeParse(response)
+
+  if (!result.success) {
+    throw new Error('The server returned invalid pagination data')
   }
 
   return result.data

@@ -148,3 +148,14 @@ test('returns an empty list when no sessions match the search', async () => {
         data: [],
     })
 })
+
+test('rejects an unsupported sort option', async () => {
+    const response = await request(app)
+        .get('/api/sessions')
+        .query({ sort: 'invalid' })
+        .expect(400)
+
+    assert.deepEqual(response.body, {
+        message: 'Sort must be topic, duration, or duration-asc',
+    })
+})
