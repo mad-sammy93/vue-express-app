@@ -12,12 +12,13 @@ import { useSessionsStore } from '@/stores/sessions.ts'
 import { usePracticeSessions } from '@/composables/usePracticeSessions'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { usePagination } from '@/composables/usePagination'
-import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
+// import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import AppPanel from '@/components/AppPanel.vue'
 import SearchInput from '@/components/SearchInput.vue'
 import PaginationControls from '@/components/PaginationControls.vue'
 import SessionList from '@/components/SessionList.vue'
 import SessionControls from '@/components/SessionControls.vue'
+import { fetchSessionsPage } from '@/services/sessions.api'
 
 const route = useRoute() // Route - for Routing and reading URL params
 const router = useRouter() // Router - for Routing
@@ -84,7 +85,8 @@ const {
   updateError,
   editingId,
   draftDuration,
-  loadSessions,
+  sessionsRevision,
+  // loadSessions,
   saveSession,
   deleteSession,
   startEditing,
@@ -222,34 +224,99 @@ const sortBy = computed<SessionSort>({
   },
 })
 
+const page = ref(1)
+const totalPages = ref(1)
+const totalMatches = ref(0)
+const pageSize = 2
+
+watch(
+  [searchQuery, sortBy],
+  () => {
+    page.value = 1
+  },
+  { flush: 'sync' },
+)
+
+watch(
+  [searchQuery, sortBy, page, sessionsRevision],
+  ([search, sort, requestedPage], [previousSearch], onCleanup) => {
+    const controller = new AbortController()
+    let timer: ReturnType<typeof setTimeout> | undefined
+
+    onCleanup(() => {
+      if (timer !== undefined) clearTimeout(timer)
+      controller.abort()
+    })
+
+    sessionsLoading.value = true
+    sessionsError.value = ''
+
+    async function loadPage(): Promise<void> {
+      try {
+        const result = await fetchSessionsPage(
+          { search, sort, page: requestedPage, limit: pageSize },
+          controller.signal,
+        )
+
+        if (controller.signal.aborted) return
+
+        totalPages.value = result.meta.totalPages
+        totalMatches.value = result.meta.total
+
+        if (requestedPage > result.meta.totalPages) {
+          page.value = result.meta.totalPages
+          return
+        }
+
+        sessions.value = result.data
+      } catch (error: unknown) {
+        if (controller.signal.aborted) return
+
+        sessionsError.value = error instanceof Error ? error.message : 'Unable to load sessions'
+      } finally {
+        if (!controller.signal.aborted) {
+          sessionsLoading.value = false
+        }
+      }
+    }
+
+    if (previousSearch !== undefined && search !== previousSearch) {
+      timer = setTimeout(() => void loadPage(), 300)
+    } else {
+      void loadPage()
+    }
+  },
+  { immediate: true },
+)
+
 //Search functionality
-const filteredSessions = computed(() => {
-  const query = searchQuery.value.trim().toLowerCase()
+// const filteredSessions = computed(() => {
+//   const query = searchQuery.value.trim().toLowerCase()
 
-  return sessions.value.filter((session) => {
-    return session.topic.toLowerCase().includes(query)
-  })
-})
+//   return sessions.value.filter((session) => {
+//     return session.topic.toLowerCase().includes(query)
+//   })
+// })
 
-const sortedSessions = computed(() => {
-  const result = [...filteredSessions.value]
+// const sortedSessions = computed(() => {
+//   const result = [...filteredSessions.value]
 
-  return result.sort((first, second) => {
-    if (sortBy.value === 'duration') {
-      return second.durationMinutes - first.durationMinutes
-    }
+//   return result.sort((first, second) => {
+//     if (sortBy.value === 'duration') {
+//       return second.durationMinutes - first.durationMinutes
+//     }
 
-    if (sortBy.value === 'duration-asc') {
-      return first.durationMinutes - second.durationMinutes
-    }
+//     if (sortBy.value === 'duration-asc') {
+//       return first.durationMinutes - second.durationMinutes
+//     }
 
-    return first.topic.localeCompare(second.topic)
-  })
-})
+//     return first.topic.localeCompare(second.topic)
+//   })
+// })
 
-const { page, totalPages, paginatedItems: paginatedSessions } = usePagination(sortedSessions, 2)
+// const { page, totalPages, paginatedItems: paginatedSessions } = usePagination(sortedSessions, 2)
 
-useDebouncedSearch(searchQuery, loadSessions, 300)
+// useDebouncedSearch(searchQuery, loadSessions, 300)
 
 // Start from page 1 when the search or sort changes.
 watch([searchQuery, sortBy], () => {
@@ -261,17 +328,17 @@ watch(totalPages, (count) => {
   page.value = Math.min(page.value, count)
 })
 
-const visibleMinutes = computed(() => {
-  return filteredSessions.value.reduce((total, session) => {
-    return total + session.durationMinutes
-  }, 0)
-})
+// const visibleMinutes = computed(() => {
+//   return sessions.value.reduce((total, session) => {
+//     return total + session.durationMinutes
+//   }, 0)
+// })
 
-const visibleMinuitesOnPage = computed(() => {
-  return paginatedSessions.value.reduce((total, session) => {
-    return total + session.durationMinutes
-  }, 0)
-})
+// const visibleMinuitesOnPage = computed(() => {
+//   return sessions.value.reduce((total, session) => {
+//     return total + session.durationMinutes
+//   }, 0)
+// })
 </script>
 
 <template>
@@ -311,7 +378,7 @@ const visibleMinuitesOnPage = computed(() => {
 
     <button
       :disabled="sessionsLoading || deletingId !== null || editingId !== null"
-      @click="loadSessions(searchQuery)"
+      @click="sessionsRevision++"
     >
       {{ sessionsLoading ? 'Loading...' : 'Load sessions' }}
     </button>
@@ -335,7 +402,7 @@ const visibleMinuitesOnPage = computed(() => {
       </select>
 
       <template #footer>
-        <p>Showing {{ filteredSessions.length }} of {{ sessions.length }} sessions</p>
+        <p>Showing {{ sessions.length }} of {{ totalMatches }} matching sessions.</p>
       </template>
     </AppPanel>
     <form @submit.prevent="submitSession">
@@ -371,7 +438,7 @@ const visibleMinuitesOnPage = computed(() => {
     <p v-else-if="sessionsError" role="alert">
       {{ sessionsError }}
     </p>
-    <SessionList v-else-if="sortedSessions.length > 0" :sessions="paginatedSessions">
+    <SessionList v-else-if="sessions.length > 0" :sessions="sessions">
       <template #item="{ session }">
         <template v-if="editingId === session.id">
           <form @submit.prevent="saveEditing">
@@ -433,13 +500,15 @@ const visibleMinuitesOnPage = computed(() => {
     <p v-if="deleteError" role="alert">{{ deleteError }}</p>
 
     <PaginationControls
-      v-if="sortedSessions.length > 0"
+      v-if="!sessionsLoading && !sessionsError && totalMatches > 0"
       v-model:page="page"
       :total-pages="totalPages"
       :disabled="editingId !== null"
     />
     <p>
-      Total practice time: {{ visibleMinutes }} minutes ({{ visibleMinuitesOnPage }} on this page)
+      Time on this page:
+      {{ sessions.reduce((total, session) => total + session.durationMinutes, 0) }} minutes
+      <!-- ({{ visibleMinuitesOnPage }} on this page) -->
     </p>
   </section>
 </template>

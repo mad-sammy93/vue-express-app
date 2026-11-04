@@ -15,6 +15,7 @@ export function usePracticeSessions() {
   const sessions = ref<Session[]>([])
   const sessionsLoading = ref(false)
   const sessionsError = ref('')
+  const sessionsRevision = ref(0)
 
   //Delete
   const deletingId = ref<number | null>(null)
@@ -71,7 +72,7 @@ export function usePracticeSessions() {
       })
 
       sessions.value.push(session)
-
+      sessionsRevision.value++
       return true
     } catch (error: unknown) {
       saveError.value = error instanceof Error ? error.message : 'Unable to save session'
@@ -94,6 +95,7 @@ export function usePracticeSessions() {
       sessions.value = sessions.value.filter((session) => {
         return session.id !== id
       })
+      sessionsRevision.value++
     } catch (error: unknown) {
       deleteError.value = error instanceof Error ? error.message : 'Unable to delete session'
     } finally {
@@ -115,7 +117,7 @@ export function usePracticeSessions() {
       sessions.value = sessions.value.map((session) => {
         return session.id === id ? updatedSession : session
       })
-
+      sessionsRevision.value++
       return true
     } catch (error: unknown) {
       updateError.value = error instanceof Error ? error.message : 'Unable to update session'
@@ -161,6 +163,7 @@ export function usePracticeSessions() {
     updateError,
     editingId,
     draftDuration,
+    sessionsRevision,
     //Methods
     loadSessions,
     saveSession,
