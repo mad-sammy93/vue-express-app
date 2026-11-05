@@ -1,23 +1,17 @@
 <script setup lang="ts">
 import { computed, ref, watch, onMounted, onUnmounted, useTemplateRef } from 'vue'
-import {
-  RouterLink,
-  // onBeforeRouteLeave,
-  useRoute,
-  useRouter,
-} from 'vue-router'
+import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { storeToRefs } from 'pinia'
 import { createSessionSchema } from '@/types/session'
 import { useSessionsStore } from '@/stores/sessions.ts'
 import { usePracticeSessions } from '@/composables/usePracticeSessions'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
-import { usePagination } from '@/composables/usePagination'
-// import { useDebouncedSearch } from '@/composables/useDebouncedSearch'
 import AppPanel from '@/components/AppPanel.vue'
 import SearchInput from '@/components/SearchInput.vue'
 import PaginationControls from '@/components/PaginationControls.vue'
 import SessionList from '@/components/SessionList.vue'
 import SessionControls from '@/components/SessionControls.vue'
+import DeleteSessionDialog from '@/components/DeleteSessionDialog.vue'
 import { fetchSessionsPage } from '@/services/sessions.api'
 
 const route = useRoute() // Route - for Routing and reading URL params
@@ -38,7 +32,6 @@ const isLoading = ref(false)
 const errorMessage = ref('')
 
 //search
-// const searchQuery = ref(localStorage.getItem('skill-lab-search') ?? '') // REMOVED TO facilitate url based search
 const searchControl = useTemplateRef<InstanceType<typeof SearchInput>>('dashboard-search')
 
 // Using zod fot validation
@@ -76,7 +69,6 @@ const {
   sessions,
   sessionsLoading,
   sessionsError,
-  totalMinutes,
   isSaving,
   saveError,
   deletingId,
@@ -86,7 +78,6 @@ const {
   editingId,
   draftDuration,
   sessionsRevision,
-  // loadSessions,
   saveSession,
   deleteSession,
   startEditing,
@@ -121,6 +112,29 @@ async function submitSession(): Promise<void> {
   }
 }
 
+// Delete Session
+const deleteDialog = useTemplateRef<InstanceType<typeof DeleteSessionDialog>>('delete-dialog')
+
+const pendingDeleteId = ref<number | null>(null)
+
+function requestDelete(id: number): void {
+  pendingDeleteId.value = id
+  deleteDialog.value?.open()
+}
+
+function cancelDelete(): void {
+  pendingDeleteId.value = null
+}
+
+async function confirmDelete(): Promise<void> {
+  const id = pendingDeleteId.value
+
+  if (id === null) return
+
+  pendingDeleteId.value = null
+  await deleteSession(id)
+}
+
 const hasUnsavedChanges = computed(() => {
   const hasNewSessionDraft = topic.value !== '' || Number(durationMinutes.value) !== 25
 
@@ -138,15 +152,8 @@ const hasUnsavedChanges = computed(() => {
   return hasNewSessionDraft || hasEditedDuration
 })
 
+// Moved to composible
 useUnsavedChanges(hasUnsavedChanges)
-
-// onBeforeRouteLeave(() => {
-//   if (!hasUnsavedChanges.value) {
-//     return true
-//   }
-
-//   return window.confirm('You have unsaved changes. Leave this page and discard them?')
-// })
 
 const searchQuery = computed<string>({
   get() {
@@ -160,6 +167,7 @@ const searchQuery = computed<string>({
       query: {
         ...route.query,
         q: value === '' ? undefined : value,
+        page: undefined,
       },
       hash: route.hash,
     })
@@ -218,24 +226,34 @@ const sortBy = computed<SessionSort>({
       query: {
         ...route.query,
         sort: value === 'topic' ? undefined : value,
+        page: undefined,
       },
       hash: route.hash,
     })
   },
 })
 
-const page = ref(1)
 const totalPages = ref(1)
 const totalMatches = ref(0)
 const pageSize = 2
+const page = computed<number>({
+  get() {
+    const value = route.query.page
+    const parsed = typeof value === 'string' ? Number(value) : NaN
 
-watch(
-  [searchQuery, sortBy],
-  () => {
-    page.value = 1
+    return Number.isSafeInteger(parsed) && parsed > 0 ? parsed : 1
   },
-  { flush: 'sync' },
-)
+
+  set(value) {
+    void router.replace({
+      query: {
+        ...route.query,
+        page: value === 1 ? undefined : String(value),
+      },
+      hash: route.hash,
+    })
+  },
+})
 
 watch(
   [searchQuery, sortBy, page, sessionsRevision],
@@ -289,35 +307,6 @@ watch(
   { immediate: true },
 )
 
-//Search functionality
-// const filteredSessions = computed(() => {
-//   const query = searchQuery.value.trim().toLowerCase()
-
-//   return sessions.value.filter((session) => {
-//     return session.topic.toLowerCase().includes(query)
-//   })
-// })
-
-// const sortedSessions = computed(() => {
-//   const result = [...filteredSessions.value]
-
-//   return result.sort((first, second) => {
-//     if (sortBy.value === 'duration') {
-//       return second.durationMinutes - first.durationMinutes
-//     }
-
-//     if (sortBy.value === 'duration-asc') {
-//       return first.durationMinutes - second.durationMinutes
-//     }
-
-//     return first.topic.localeCompare(second.topic)
-//   })
-// })
-
-// const { page, totalPages, paginatedItems: paginatedSessions } = usePagination(sortedSessions, 2)
-
-// useDebouncedSearch(searchQuery, loadSessions, 300)
-
 // Start from page 1 when the search or sort changes.
 watch([searchQuery, sortBy], () => {
   page.value = 1
@@ -327,18 +316,6 @@ watch([searchQuery, sortBy], () => {
 watch(totalPages, (count) => {
   page.value = Math.min(page.value, count)
 })
-
-// const visibleMinutes = computed(() => {
-//   return sessions.value.reduce((total, session) => {
-//     return total + session.durationMinutes
-//   }, 0)
-// })
-
-// const visibleMinuitesOnPage = computed(() => {
-//   return sessions.value.reduce((total, session) => {
-//     return total + session.durationMinutes
-//   }, 0)
-// })
 </script>
 
 <template>
@@ -483,7 +460,7 @@ watch(totalPages, (count) => {
           <button
             type="button"
             :disabled="editingId !== null || deletingId !== null || sessionsLoading || isSaving"
-            @click="deleteSession(session.id)"
+            @click="requestDelete(session.id)""
           >
             {{ deletingId === session.id ? 'Deleting...' : 'Delete' }}
           </button>
@@ -511,6 +488,11 @@ watch(totalPages, (count) => {
       <!-- ({{ visibleMinuitesOnPage }} on this page) -->
     </p>
   </section>
+  <DeleteSessionDialog
+    ref="delete-dialog"
+    @confirm="confirmDelete"
+    @cancel="cancelDelete"
+  />
 </template>
 
 <style scoped>

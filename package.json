@@ -1,0 +1,35 @@
+{
+  "name": "vue-1",
+  "version": "1.0.0",
+  "description": "",
+  "main": "index.js",
+  "scripts": {
+    "dev": "concurrently --kill-others --names frontend,api \"npm run dev:frontend\" \"npm run dev:api\"",
+    "dev:frontend": "npm --prefix frontend run dev",
+    "test:frontend": "npm --prefix frontend run test:unit -- --run",
+    "dev:api": "npm --prefix api run dev",
+    "test:api": "npm --prefix api test",
+    "test": "npm run test:api && npm run test:frontend",
+    "test:e2e": "cd frontend && npm run test:e2e",
+    "test:e2e:dev": "cd frontend && npm run test:e2e:dev",
+    "check:all": "npm run check && npm run test:e2e",
+    "build": "npm --prefix frontend run build",
+    "check": "npm test && npm run build",
+    "type-check": "npm --prefix frontend run type-check"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/mad-sammy93/vue-express-app.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/mad-sammy93/vue-express-app/issues"
+  },
+  "homepage": "https://github.com/mad-sammy93/vue-express-app#readme",
+  "devDependencies": {
+    "concurrently": "^10.0.6"
+  }
+}

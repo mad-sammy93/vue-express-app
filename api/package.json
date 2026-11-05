@@ -5,7 +5,7 @@
   "main": "index.js",
   "scripts": {
     "test": "node --test",
-    "dev": "node --watch src/server.js"
+    "dev": "node --env-file=.env --watch src/server.js"
   },
   "keywords": [],
   "author": "",

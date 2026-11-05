@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import type { Session } from '../types/session'
+import type { Session } from '@/types/session'
 
 defineProps<{
   sessions: Session[]
