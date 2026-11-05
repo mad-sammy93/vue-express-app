@@ -331,7 +331,8 @@ describe('Practice sessions', () => {
     cy.get('[data-test="previous-page"]').should('be.enabled')
     cy.get('[data-test="next-page"]').should('be.disabled')
   })
-  it('keeps the session when deletion is canceled', () => {
+
+  it('shows the selected topic and keeps the session when deletion is canceled', () => {
     mockSessionList([
       {
         id: 1,
@@ -351,7 +352,7 @@ describe('Practice sessions', () => {
       cy.contains('button', /^Delete$/).click()
     })
 
-    cy.get('dialog[open]').should('be.visible')
+    cy.get('dialog[open]').should('be.visible').and('contain.text', 'Delete “Vue reactivity”?')
 
     cy.get('dialog[open]').within(() => {
       cy.contains('button', 'Cancel').click()
@@ -359,7 +360,76 @@ describe('Practice sessions', () => {
 
     cy.get('dialog').should('not.be.visible')
     cy.contains('li', 'Vue reactivity').should('be.visible')
-
     cy.get('@deleteSession.all').should('have.length', 0)
+  })
+
+  it('returns to the previous page after deleting the last page’s only session', () => {
+    const records: Session[] = [
+      { id: 1, topic: 'Composition API', durationMinutes: 25 },
+      { id: 2, topic: 'Pinia stores', durationMinutes: 30 },
+      { id: 3, topic: 'Vue Router', durationMinutes: 20 },
+    ]
+
+    mockSessionList(records)
+
+    cy.intercept('DELETE', '/api/sessions/3', (req) => {
+      const index = records.findIndex((session) => session.id === 3)
+
+      if (index === -1) {
+        req.reply({
+          statusCode: 404,
+          body: { message: 'Session not found' },
+        })
+        return
+      }
+
+      records.splice(index, 1)
+      req.reply({ statusCode: 204 })
+    }).as('deleteSession')
+
+    cy.visit('/')
+    cy.wait('@loadSessions')
+
+    cy.get('[data-test="next-page"]').click()
+    cy.wait('@loadSessions')
+
+    cy.contains('Page 2 of 2').should('be.visible')
+
+    cy.contains('li', 'Vue Router').within(() => {
+      cy.contains('button', /^Delete$/).click()
+    })
+
+    cy.get('dialog[open]').within(() => {
+      cy.get('[data-test="confirm-delete"]').click()
+    })
+
+    cy.wait('@deleteSession').its('response.statusCode').should('eq', 204)
+
+    // Reloading page two reveals that only one page remains.
+    cy.wait('@loadSessions').then(({ request, response }) => {
+      expect(new URL(request.url).searchParams.get('page')).to.eq('2')
+      expect(response?.body.meta.totalPages).to.eq(1)
+    })
+
+    // The dashboard then requests the last valid page.
+    cy.wait('@loadSessions').then(({ request }) => {
+      expect(new URL(request.url).searchParams.get('page')).to.eq('1')
+    })
+
+    cy.contains('Page 1 of 1').should('be.visible')
+
+    cy.location('search').should((search) => {
+      const query = new URLSearchParams(search)
+
+      expect(query.has('page')).to.eq(false)
+    })
+
+    cy.contains('li', 'Composition API').should('be.visible')
+    cy.contains('li', 'Pinia stores').should('be.visible')
+    cy.contains('li', 'Vue Router').should('not.exist')
+
+    cy.get('dialog').should('not.be.visible')
+    cy.get('[data-test="next-page"]').should('be.disabled')
+    cy.get('@deleteSession.all').should('have.length', 1)
   })
 })

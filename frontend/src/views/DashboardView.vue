@@ -117,6 +117,14 @@ const deleteDialog = useTemplateRef<InstanceType<typeof DeleteSessionDialog>>('d
 
 const pendingDeleteId = ref<number | null>(null)
 
+const pendingDeleteTopic = computed(() => {
+  const session = sessions.value.find((session) => {
+    return session.id === pendingDeleteId.value
+  })
+
+  return session?.topic ?? ''
+})
+
 function requestDelete(id: number): void {
   pendingDeleteId.value = id
   deleteDialog.value?.open()
@@ -490,6 +498,7 @@ watch(totalPages, (count) => {
   </section>
   <DeleteSessionDialog
     ref="delete-dialog"
+    :session-topic="pendingDeleteTopic"
     @confirm="confirmDelete"
     @cancel="cancelDelete"
   />

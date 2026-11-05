@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { useTemplateRef } from 'vue'
 
+defineProps<{
+  sessionTopic: string
+}>()
+
+// Dialog
 const dialog = useTemplateRef<HTMLDialogElement>('dialog')
 
 const emit = defineEmits<{
@@ -28,7 +33,7 @@ defineExpose({ open })
 <template>
   <dialog ref="dialog" aria-label="Delete session" @cancel="emit('cancel')">
     <h2>Delete session?</h2>
-    <p>This practice session will be removed.</p>
+    <p>Delete “{{ sessionTopic }}”? This practice session will be removed.</p>
 
     <button type="button" autofocus @click="cancelDeletion">Cancel</button>
 
